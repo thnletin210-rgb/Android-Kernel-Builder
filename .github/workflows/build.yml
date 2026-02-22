@@ -1,4 +1,4 @@
-name: Build Kernel Viva A16 - Final Boss
+name: Build Kernel Viva A16 - Final Repair
 on:
   workflow_dispatch:
 
@@ -14,36 +14,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git lz4
 
-      - name: Download Google Clang (Link vinh vien)
+      - name: Download Proton Clang (Direct Link)
         run: |
           mkdir -p clang
-          cd clang
-          # Tai truc tiep tu server Google, giai nen luon, khong dung script .sh nao het
-          curl -Lo clang.tar.gz https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz
-          tar -xf clang.tar.gz
-          echo "CLANG_DIR=$(pwd)/bin" >> $GITHUB_ENV
+          # Dung link tai truc tiep file .tar.gz de tranh loi 'not in gzip format'
+          curl -L https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz -o clang.tar.gz
+          tar -xf clang.tar.gz -C clang --strip-components=1
+          echo "CLANG_DIR=$(pwd)/clang/bin" >> $GITHUB_ENV
 
       - name: Clone Source Kernel
         run: |
-          git clone --depth=1 https://github.com/viva-development/android_kernel_xiaomi_viva -b 14 kernel-source
+          git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva
 
-      - name: Patch KSU Next & Android 16
+      - name: Patch KSU Next & A16 Config
         run: |
           cd kernel-source
-          # Cai KSU Next bang lenh truc tiep
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
           
-          # Patch truc tiep vao defconfig
           CONF="arch/arm64/configs/viva_defconfig"
-          echo "CONFIG_BPF=y" >> $CONF
-          echo "CONFIG_BPF_SYSCALL=y" >> $CONF
-          echo "CONFIG_BPF_JIT=y" >> $CONF
-          echo "CONFIG_HAVE_EBPF_JIT=y" >> $CONF
-          echo "CONFIG_NET_CLS_BPF=y" >> $CONF
-          echo "CONFIG_NET_ACT_BPF=y" >> $CONF
-          echo "CONFIG_BPF_EVENTS=y" >> $CONF
-          echo "CONFIG_ANDROID_BINDERFS=y" >> $CONF
-          echo "CONFIG_SECURITY_SELINUX_DISABLE=y" >> $CONF
+          sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
+          {
+            echo "CONFIG_BPF=y"
+            echo "CONFIG_BPF_SYSCALL=y"
+            echo "CONFIG_BPF_JIT=y"
+            echo "CONFIG_HAVE_EBPF_JIT=y"
+            echo "CONFIG_NET_CLS_BPF=y"
+            echo "CONFIG_NET_ACT_BPF=y"
+            echo "CONFIG_BPF_EVENTS=y"
+            echo "CONFIG_ANDROID_BINDERFS=y"
+            echo "CONFIG_SECURITY_SELINUX_DISABLE=y"
+          } >> $CONF
 
       - name: Build Kernel
         run: |
@@ -57,7 +57,6 @@ jobs:
           
           make O=out viva_defconfig
           make -j$(nproc --all) O=out \
-            CC=clang \
             NM=llvm-nm \
             OBJCOPY=llvm-objcopy \
             LD=ld.lld \
