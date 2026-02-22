@@ -19,21 +19,24 @@ jobs:
           mkdir -p clang
           curl -L https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz -o clang.tar.gz
           tar -xf clang.tar.gz -C clang --strip-components=1
-          # Luu duong dan tuyet doi de build khong bao gio loi
           echo "CLANG_DIR=$(pwd)/clang/bin" >> $GITHUB_ENV
 
       - name: Clone Source Kernel
         run: |
-          # Clone vao thu muc nam ngoai clang
-          git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva
+          # Ép tên thư mục đầu ra là kernel-source để đồng bộ các lệnh sau
+          git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva kernel-source
 
       - name: Patch KSU Next & A16 Config
         run: |
-          # Di vao dung thu muc kernel-source
           cd kernel-source
+          # Cài KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
           
+          # Cấu hình defconfig cho Android 16
           CONF="arch/arm64/configs/viva_defconfig"
+          # Nếu file không tồn tại, script sẽ thử tìm file config khác có chữ viva
+          [ ! -f $CONF ] && CONF=$(find arch/arm64/configs/ -name "*viva*" | head -n 1)
+          
           sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
           {
             echo "CONFIG_BPF=y"
@@ -57,7 +60,11 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CC=clang
           
-          make O=out viva_defconfig
+          # Lấy tên file config chuẩn
+          CONF="viva_defconfig"
+          [ ! -f arch/arm64/configs/$CONF ] && CONF=$(basename $(find arch/arm64/configs/ -name "*viva*" | head -n 1))
+
+          make O=out $CONF
           make -j$(nproc --all) O=out \
             NM=llvm-nm \
             OBJCOPY=llvm-objcopy \
