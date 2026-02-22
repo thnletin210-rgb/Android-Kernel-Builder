@@ -1,90 +1,77 @@
-name: Build Kernel cho Note 11 Pro 4G (Viva) - Android 16
-
+name: Build Kernel Viva A16 (Fix Ubuntu 24.04)
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Kernel Viva
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Builder
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Environment
+      - name: Setup Environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng maven libssl-dev pwgen libswitch-perl policycoreutils minicom libxml-sax-base-perl libxml-simple-perl bc libc6-dev-i386 lib32ncurses5-dev libx11-dev lib32z-dev libgl1-mesa-dev xsltproc unzip device-tree-compiler python2 python3
+          sudo apt-get update -y
+          # Bo qua python2 va lib32ncurses, chi cai nhung cai thuc su can thiet
+          sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git
 
-      - name: Download Toolchain (Clang 17)
+      - name: Download Clang
         run: |
-          mkdir -p clang
+          mkdir clang
           cd clang
-          curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/clang-build-catalogue/main/neutron-clang-setup.sh"
-          bash neutron-clang-setup.sh
-          echo "CLANG_DIR=$(pwd)" >> $GITHUB_ENV
+          # Dung Clang cua ZyCromerZ rat on dinh cho MTK
+          curl -LSs https://raw.githubusercontent.com/ZyCromerZ/Clang/main/bundle_install.sh | bash -s -- --version 17
+          echo "CLANG_DIR=$(pwd)/bin" >> $GITHUB_ENV
 
-      - name: Clone Source Kernel Viva (Base)
+      - name: Clone Source
         run: |
-          # Dung source co ban nhat cua Viva
-          git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva
-      - name: THE MAGIC SCRIPT - Upstream, KSU Next & A16 Patch
+          git clone --depth=1 https://github.com/viva-development/android_kernel_xiaomi_viva -b 14 kernel-source
+
+      - name: Patch KSU & Android 16
         run: |
-          cd kernel
-          git config --global user.email "bot@viva.com"
-          git config --global user.name "VivaBot"
-
-          echo "=========================================="
-          echo "1. THU UPSTREAM LEN 4.19.325"
-          echo "=========================================="
-          git remote add stable https://kernel.googlesource.com/pub/scm/linux/kernel/git/stable/linux-stable.git
-          git fetch stable
-          # Thu merge, neu loi thi huy merge de giu code sach
-          git merge v4.19.325 --no-edit || git merge --abort
-
-          echo "=========================================="
-          echo "2. CAI KERNELSU NEXT"
-          echo "=========================================="
+          cd kernel-source
+          
+          # 1. Cai KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
 
-          echo "=========================================="
-          echo "3. VA LOI DE BOOT HYPEROS 3 & ANDROID 16"
-          echo "=========================================="
+          # 2. Config cho Android 16 & HyperOS
           CONF="arch/arm64/configs/viva_defconfig"
           
-          # Them flag eBPF (Bat buoc cho Android 16)
-          echo "CONFIG_BPF=y" >> $CONF
-          echo "CONFIG_BPF_SYSCALL=y" >> $CONF
-          echo "CONFIG_BPF_JIT=y" >> $CONF
-          echo "CONFIG_HAVE_EBPF_JIT=y" >> $CONF
-          echo "CONFIG_NET_CLS_BPF=y" >> $CONF
-          echo "CONFIG_NET_ACT_BPF=y" >> $CONF
-          echo "CONFIG_BPF_EVENTS=y" >> $CONF
-          
-          # Them BinderFS (Bat buoc cho HyperOS)
-          echo "CONFIG_ANDROID_BINDERFS=y" >> $CONF
-          
-          # Tat kiem tra bao mat de de boot
-          echo "CONFIG_SECURITY_SELINUX_DISABLE=y" >> $CONF
-          echo "CONFIG_SECURITY_SELINUX_BOOTPARAM=y" >> $CONF
-          echo "CONFIG_DEBUG_SECTION_MISMATCH=y" >> $CONF
+          # Dam bao bat cac tinh nang eBPF cho Android 16
+          sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
+          {
+            echo "CONFIG_BPF=y"
+            echo "CONFIG_BPF_SYSCALL=y"
+            echo "CONFIG_BPF_JIT=y"
+            echo "CONFIG_HAVE_EBPF_JIT=y"
+            echo "CONFIG_NET_CLS_BPF=y"
+            echo "CONFIG_NET_ACT_BPF=y"
+            echo "CONFIG_BPF_EVENTS=y"
+            echo "CONFIG_ANDROID_BINDERFS=y"
+            echo "CONFIG_SECURITY_SELINUX_DISABLE=y"
+          } >> $CONF
 
       - name: Build Kernel
         run: |
           cd kernel-source
-          export PATH="${{ env.CLANG_DIR }}/bin:$PATH"
+          export PATH="${{ env.CLANG_DIR }}:$PATH"
+          
+          # Thiet lap cac bien moi truong
           export ARCH=arm64
           export SUBARCH=arm64
-          export KBUILD_COMPILER_STRING="$(clang --version | head -n 1)"
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
           
-          # Tao file config
-          make O=out ARCH=arm64 viva_defconfig
-          
-          # Bat dau build
-          make -j$(nproc --all) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image.gz-dtb
+          # Chinh python de khong loi
+          ln -sf /usr/bin/python3 out/python_link
+          export PATH="$(pwd)/out:$PATH"
 
-      - name: Upload Kernel Image
+          make O=out viva_defconfig
+          make -j$(nproc --all) O=out Image.gz-dtb
+
+      - name: Upload Thành Phẩm
         uses: actions/upload-artifact@v4
         with:
-          name: Viva-A16-KernelSU-Next-Image
+          name: Kernel_Viva_A16_Final
           path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
