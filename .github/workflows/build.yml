@@ -1,4 +1,4 @@
-name: Build Kernel Viva A16 (Fix Clang 404)
+name: Build Kernel Viva A16 - Neutron Fix
 on:
   workflow_dispatch:
 
@@ -14,25 +14,25 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git lz4
 
-      - name: Download AOSP Clang (r487747c)
+      - name: Download Neutron Clang (Chuẩn)
         run: |
           mkdir -p clang
           cd clang
-          # Tai Clang chinh thuc tu Google AOSP
-          curl -Lo clang.tar.gz https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz
-          tar -xf clang.tar.gz
+          # Dung link chuẩn bạn đưa nhưng lấy bản nén cho nhanh
+          curl -LSs https://raw.githubusercontent.com/Neutron-Toolchains/clang-build-catalogue/main/neutron-clang-setup.sh | bash
           echo "CLANG_DIR=$(pwd)/bin" >> $GITHUB_ENV
 
-      - name: Clone Source
+      - name: Clone Source Kernel
         run: |
           git clone --depth=1 https://github.com/viva-development/android_kernel_xiaomi_viva -b 14 kernel-source
 
-      - name: Patch KSU & Android 16
+      - name: Patch KSU Next & Android 16
         run: |
           cd kernel-source
           # 1. Cai KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
-          # 2. Config cho Android 16
+          
+          # 2. Config đặc trị cho Android 16 & HyperOS
           CONF="arch/arm64/configs/viva_defconfig"
           sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
           {
@@ -53,18 +53,26 @@ jobs:
           export PATH="${{ env.CLANG_DIR }}:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          export CC=clang
           
-          # Build bước 1: Tạo file config
+          # Build config
           make O=out viva_defconfig
           
-          # Build bước 2: Nấu Kernel chính thức
-          make -j$(nproc --all) O=out Image.gz-dtb
+          # Chạy build chính thức với Neutron Clang
+          make -j$(nproc --all) O=out \
+            ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image.gz-dtb
 
       - name: Upload Thành Phẩm
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_Viva_A16_GoogleClang
+          name: Kernel_Viva_A16_Neutron
           path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
