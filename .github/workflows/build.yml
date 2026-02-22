@@ -1,4 +1,4 @@
-name: Build Kernel Viva A16 (Fix Ubuntu 24.04)
+name: Build Kernel Viva A16 (Fix Clang 404)
 on:
   workflow_dispatch:
 
@@ -12,15 +12,15 @@ jobs:
       - name: Setup Environment
         run: |
           sudo apt-get update -y
-          # Bo qua python2 va lib32ncurses, chi cai nhung cai thuc su can thiet
-          sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git
+          sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git lz4
 
-      - name: Download Clang
+      - name: Download AOSP Clang (r487747c)
         run: |
-          mkdir clang
+          mkdir -p clang
           cd clang
-          # Dung Clang cua ZyCromerZ rat on dinh cho MTK
-          curl -LSs https://raw.githubusercontent.com/ZyCromerZ/Clang/main/bundle_install.sh | bash -s -- --version 17
+          # Tai Clang chinh thuc tu Google AOSP
+          curl -Lo clang.tar.gz https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz
+          tar -xf clang.tar.gz
           echo "CLANG_DIR=$(pwd)/bin" >> $GITHUB_ENV
 
       - name: Clone Source
@@ -30,14 +30,10 @@ jobs:
       - name: Patch KSU & Android 16
         run: |
           cd kernel-source
-          
           # 1. Cai KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
-
-          # 2. Config cho Android 16 & HyperOS
+          # 2. Config cho Android 16
           CONF="arch/arm64/configs/viva_defconfig"
-          
-          # Dam bao bat cac tinh nang eBPF cho Android 16
           sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
           {
             echo "CONFIG_BPF=y"
@@ -55,23 +51,20 @@ jobs:
         run: |
           cd kernel-source
           export PATH="${{ env.CLANG_DIR }}:$PATH"
-          
-          # Thiet lap cac bien moi truong
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CC=clang
           
-          # Chinh python de khong loi
-          ln -sf /usr/bin/python3 out/python_link
-          export PATH="$(pwd)/out:$PATH"
-
+          # Build bước 1: Tạo file config
           make O=out viva_defconfig
+          
+          # Build bước 2: Nấu Kernel chính thức
           make -j$(nproc --all) O=out Image.gz-dtb
 
       - name: Upload Thành Phẩm
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_Viva_A16_Final
+          name: Kernel_Viva_A16_GoogleClang
           path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
