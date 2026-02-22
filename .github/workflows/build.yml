@@ -23,32 +23,28 @@ jobs:
 
       - name: Clone Source Kernel
         run: |
-          # Ép tên thư mục đầu ra là kernel-source để đồng bộ các lệnh sau
           git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva kernel-source
 
-      - name: Patch KSU Next & A16 Config
+      - name: Patch KSU Next
         run: |
           cd kernel-source
-          # Cài KSU Next
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
-          
-          # Cấu hình defconfig cho Android 16
+
+      - name: Patch A16 Config
+        run: |
+          cd kernel-source
           CONF="arch/arm64/configs/viva_defconfig"
-          # Nếu file không tồn tại, script sẽ thử tìm file config khác có chữ viva
           [ ! -f $CONF ] && CONF=$(find arch/arm64/configs/ -name "*viva*" | head -n 1)
-          
           sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
-          {
-            echo "CONFIG_BPF=y"
-            echo "CONFIG_BPF_SYSCALL=y"
-            echo "CONFIG_BPF_JIT=y"
-            echo "CONFIG_HAVE_EBPF_JIT=y"
-            echo "CONFIG_NET_CLS_BPF=y"
-            echo "CONFIG_NET_ACT_BPF=y"
-            echo "CONFIG_BPF_EVENTS=y"
-            echo "CONFIG_ANDROID_BINDERFS=y"
-            echo "CONFIG_SECURITY_SELINUX_DISABLE=y"
-          } >> $CONF
+          echo "CONFIG_BPF=y" >> $CONF
+          echo "CONFIG_BPF_SYSCALL=y" >> $CONF
+          echo "CONFIG_BPF_JIT=y" >> $CONF
+          echo "CONFIG_HAVE_EBPF_JIT=y" >> $CONF
+          echo "CONFIG_NET_CLS_BPF=y" >> $CONF
+          echo "CONFIG_NET_ACT_BPF=y" >> $CONF
+          echo "CONFIG_BPF_EVENTS=y" >> $CONF
+          echo "CONFIG_ANDROID_BINDERFS=y" >> $CONF
+          echo "CONFIG_SECURITY_SELINUX_DISABLE=y" >> $CONF
 
       - name: Build Kernel
         run: |
@@ -60,11 +56,10 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CC=clang
           
-          # Lấy tên file config chuẩn
-          CONF="viva_defconfig"
-          [ ! -f arch/arm64/configs/$CONF ] && CONF=$(basename $(find arch/arm64/configs/ -name "*viva*" | head -n 1))
+          CONF_NAME="viva_defconfig"
+          [ ! -f arch/arm64/configs/$CONF_NAME ] && CONF_NAME=$(basename $(find arch/arm64/configs/ -name "*viva*" | head -n 1))
 
-          make O=out $CONF
+          make O=out $CONF_NAME
           make -j$(nproc --all) O=out \
             NM=llvm-nm \
             OBJCOPY=llvm-objcopy \
