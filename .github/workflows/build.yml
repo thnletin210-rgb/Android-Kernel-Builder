@@ -1,4 +1,4 @@
-name: Build Kernel Viva A16 - Final Repair
+name: Build Kernel Viva A16 - Final Success
 on:
   workflow_dispatch:
 
@@ -14,20 +14,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git lz4
 
-      - name: Download Proton Clang (Direct Link)
+      - name: Download Toolchain
         run: |
           mkdir -p clang
-          # Dung link tai truc tiep file .tar.gz de tranh loi 'not in gzip format'
           curl -L https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz -o clang.tar.gz
           tar -xf clang.tar.gz -C clang --strip-components=1
+          # Luu duong dan tuyet doi de build khong bao gio loi
           echo "CLANG_DIR=$(pwd)/clang/bin" >> $GITHUB_ENV
 
       - name: Clone Source Kernel
         run: |
-          git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva
+          # Clone vao thu muc nam ngoai clang
+          git clone --depth=1 https://github.com/viva-development/android_kernel_xiaomi_viva -b 14 kernel-source
 
       - name: Patch KSU Next & A16 Config
         run: |
+          # Di vao dung thu muc kernel-source
           cd kernel-source
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
           
@@ -63,7 +65,7 @@ jobs:
             STRIP=llvm-strip \
             Image.gz-dtb
 
-      - name: Upload
+      - name: Upload Thành Phẩm
         uses: actions/upload-artifact@v4
         with:
           name: Kernel_Viva_A16
