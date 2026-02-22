@@ -25,7 +25,7 @@ jobs:
       - name: Clone Source Kernel
         run: |
           # Clone vao thu muc nam ngoai clang
-          git clone --depth=1 https://github.com/viva-development/android_kernel_xiaomi_viva -b 14 kernel-source
+          git clone --depth=1 https://github.com/xiaomi-mt6781-devs/kernel_xiaomi_viva
 
       - name: Patch KSU Next & A16 Config
         run: |
