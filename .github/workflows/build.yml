@@ -1,4 +1,4 @@
-name: Build Kernel Viva A16 - Neutron Fix
+name: Build Kernel Viva A16 - Final Boss
 on:
   workflow_dispatch:
 
@@ -11,15 +11,16 @@ jobs:
 
       - name: Setup Environment
         run: |
-          sudo apt-get update -y
+          sudo apt-get update
           sudo apt-get install -y bc build-essential zip curl libssl-dev flex bison libncurses-dev python3 git lz4
 
-      - name: Download Neutron Clang (Chuẩn)
+      - name: Download Google Clang (Link vinh vien)
         run: |
           mkdir -p clang
           cd clang
-          # Dung link chuẩn bạn đưa nhưng lấy bản nén cho nhanh
-          curl -LSs https://raw.githubusercontent.com/Neutron-Toolchains/clang-build-catalogue/main/neutron-clang-setup.sh | bash
+          # Tai truc tiep tu server Google, giai nen luon, khong dung script .sh nao het
+          curl -Lo clang.tar.gz https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz
+          tar -xf clang.tar.gz
           echo "CLANG_DIR=$(pwd)/bin" >> $GITHUB_ENV
 
       - name: Clone Source Kernel
@@ -29,23 +30,20 @@ jobs:
       - name: Patch KSU Next & Android 16
         run: |
           cd kernel-source
-          # 1. Cai KSU Next
+          # Cai KSU Next bang lenh truc tiep
           curl -LSs "https://raw.githubusercontent.com/rifsytn/KernelSU-Next/main/kernel/setup.sh" | bash -s next
           
-          # 2. Config đặc trị cho Android 16 & HyperOS
+          # Patch truc tiep vao defconfig
           CONF="arch/arm64/configs/viva_defconfig"
-          sed -i 's/# CONFIG_BPF is not set/CONFIG_BPF=y/' $CONF
-          {
-            echo "CONFIG_BPF=y"
-            echo "CONFIG_BPF_SYSCALL=y"
-            echo "CONFIG_BPF_JIT=y"
-            echo "CONFIG_HAVE_EBPF_JIT=y"
-            echo "CONFIG_NET_CLS_BPF=y"
-            echo "CONFIG_NET_ACT_BPF=y"
-            echo "CONFIG_BPF_EVENTS=y"
-            echo "CONFIG_ANDROID_BINDERFS=y"
-            echo "CONFIG_SECURITY_SELINUX_DISABLE=y"
-          } >> $CONF
+          echo "CONFIG_BPF=y" >> $CONF
+          echo "CONFIG_BPF_SYSCALL=y" >> $CONF
+          echo "CONFIG_BPF_JIT=y" >> $CONF
+          echo "CONFIG_HAVE_EBPF_JIT=y" >> $CONF
+          echo "CONFIG_NET_CLS_BPF=y" >> $CONF
+          echo "CONFIG_NET_ACT_BPF=y" >> $CONF
+          echo "CONFIG_BPF_EVENTS=y" >> $CONF
+          echo "CONFIG_ANDROID_BINDERFS=y" >> $CONF
+          echo "CONFIG_SECURITY_SELINUX_DISABLE=y" >> $CONF
 
       - name: Build Kernel
         run: |
@@ -53,26 +51,21 @@ jobs:
           export PATH="${{ env.CLANG_DIR }}:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          export CC=clang
           
-          # Build config
           make O=out viva_defconfig
-          
-          # Chạy build chính thức với Neutron Clang
           make -j$(nproc --all) O=out \
-            ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
-            AR=llvm-ar \
             NM=llvm-nm \
             OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
+            LD=ld.lld \
             STRIP=llvm-strip \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image.gz-dtb
 
-      - name: Upload Thành Phẩm
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel_Viva_A16_Neutron
+          name: Kernel_Viva_A16
           path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
